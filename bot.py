@@ -2,78 +2,75 @@ import os
 import logging
 import time
 
-# Детальне логування
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.DEBUG)
 
-def debug_environment():
-    logging.info("🔍 === ПОЧАТОК ДЕБАГУ СЕРЕДОВИЩА ===")
+def check_railway_environment():
+    """Спеціальна функція для перевірки Railway середовища"""
     
-    # Отримуємо BOT_TOKEN
-    bot_token = os.environ.get('BOT_TOKEN')
-    logging.info(f"🎯 BOT_TOKEN = {bot_token}")
+    # Спеціальні змінні Railway
+    railway_vars = [
+        'RAILWAY_ENVIRONMENT',
+        'RAILWAY_SERVICE_NAME', 
+        'RAILWAY_PROJECT_NAME',
+        'RAILWAY_GIT_COMMIT_SHA',
+        'BOT_TOKEN'
+    ]
     
-    # Перевіряємо довжину токена
-    if bot_token:
-        logging.info(f"📏 Довжина токена: {len(bot_token)} символів")
-    else:
-        logging.info("❌ Токен не знайдено або порожній")
+    logging.info("🔍 ПЕРЕВІРКА RAILWAY СЕРЕДОВИЩА")
     
-    # Виводимо ВСІ змінні середовища (для дебагу)
-    logging.info("📋 ВСІ змінні середовища:")
-    for key, value in os.environ.items():
-        if any(word in key.upper() for word in ['BOT', 'TOKEN', 'SECRET', 'KEY']):
-            masked_value = value[:10] + '...' + value[-10:] if len(value) > 20 else value
-            logging.info(f"   {key} = {masked_value}")
+    all_vars_found = False
+    for var in railway_vars:
+        value = os.environ.get(var)
+        if value:
+            logging.info(f"✅ {var} = {value}")
+            all_vars_found = True
+        else:
+            logging.info(f"❌ {var} = НЕ ЗНАЙДЕНО")
     
-    logging.info("🔚 === КІНЕЦЬ ДЕБАГУ ===")
+    if not all_vars_found:
+        logging.error("🚨 СЕРЕДОВИЩЕ RAILWAY НЕ ЗАВАНТАЖЕНЕ!")
+        logging.error("💡 Можливі причини:")
+        logging.error("   - Неправильний тип сервісу (потрібен Web Service)")
+        logging.error("   - Проблема з платформою Railway")
+        logging.error("   - Потрібно створити новий проект")
     
-    return bot_token
+    return all_vars_found
 
 def main():
-    logging.info("🚀 Запуск бота...")
+    logging.info("🚀 Запуск перевірки Railway середовища...")
+    time.sleep(3)
     
-    # Чекаємо 5 секунд (іноді змінні завантажуються з затримкою)
-    time.sleep(5)
+    # Перевіряємо середовище Railway
+    env_ok = check_railway_environment()
     
-    # Дебаг середовища
-    bot_token = debug_environment()
-    
-    if not bot_token:
-        logging.error("❌ КРИТИЧНА ПОМИЛКА: BOT_TOKEN не знайдено!")
-        logging.error("🛠 Дії для вирішення:")
-        logging.error("1. Перейдіть в Railway → Variables")
-        logging.error("2. Переконайтесь що змінна називається 'BOT_TOKEN'")
-        logging.error("3. Переконайтесь що значення введено правильно")
-        logging.error("4. Натисніть 'Redeploy' після змін")
+    if not env_ok:
+        logging.error("❌ Неможливо продовжити - середовище не налаштоване")
         return
     
-    # Якщо токен знайдено, продовжуємо
-    logging.info("✅ BOT_TOKEN знайдено! Спробуємо ініціалізувати бота...")
-    
-    try:
-        from telegram.ext import Application
+    # Перевіряємо BOT_TOKEN
+    bot_token = os.environ.get('BOT_TOKEN')
+    if bot_token:
+        logging.info(f"✅ BOT_TOKEN знайдено! Довжина: {len(bot_token)}")
         
-        app = Application.builder().token(bot_token).build()
-        logging.info("🟢 Бот успішно ініціалізований!")
-        
-        # Додаємо просту команду для тесту
-        from telegram import Update
-        from telegram.ext import ContextTypes, CommandHandler
-        
-        async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-            await update.message.reply_text("🎉 Бот успішно працює на Railway!")
-        
-        app.add_handler(CommandHandler("start", start))
-        
-        # Запускаємо
-        logging.info("🟢 Запускаємо опитування...")
-        app.run_polling(drop_pending_updates=True)
-        
-    except Exception as e:
-        logging.error(f"❌ Помилка ініціалізації: {e}")
+        # Спробуємо запустити бота
+        try:
+            from telegram.ext import Application
+            app = Application.builder().token(bot_token).build()
+            logging.info("🟢 Бот ініціалізований успішно!")
+            
+            from telegram import Update
+            from telegram.ext import ContextTypes, CommandHandler
+            
+            async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+                await update.message.reply_text("🎉 Бот працює на Railway!")
+            
+            app.add_handler(CommandHandler("start", start))
+            app.run_polling()
+            
+        except Exception as e:
+            logging.error(f"❌ Помилка бота: {e}")
+    else:
+        logging.error("❌ BOT_TOKEN не знайдено навіть після перевірки середовища")
 
 if __name__ == '__main__':
     main()
