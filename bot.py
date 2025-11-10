@@ -1,83 +1,79 @@
 import os
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import time
 
-# Налаштування логування для Railway
+# Детальне логування
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-# Отримуємо токен з змінних середовища Railway
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
-
-if not BOT_TOKEN:
-    logging.error("❌ BOT_TOKEN не знайдено! Перевірте змінні середовища в Railway.")
-    exit(1)
-
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    await update.message.reply_html(
-        f"🚀 Привіт, {user.mention_html()}!\n\n"
-        "Я успішно розгорнутий на <b>Railway.app</b>!\n"
-        "Надішли мені повідомлення, і я його повторю.\n\n"
-        "<b>Команди:</b>\n"
-        "/start - цей текст\n"
-        "/help - довідка\n"
-        "/status - статус бота"
-    )
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "📖 <b>Довідка</b>\n\n"
-        "Цей бот демонструє розгортання на Railway.app\n"
-        "Він повторює ваші повідомлення та має кілька команд.",
-        parse_mode='HTML'
-    )
-
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "✅ <b>Статус: Активний</b>\n\n"
-        "🛠 <b>Хостинг:</b> Railway.app\n"
-        "💾 <b>Статус:</b> Працює стабільно\n"
-        "⚡ <b>Режим:</b> Polling",
-        parse_mode='HTML'
-    )
-
-async def echo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_message = update.message.text
-    user = update.effective_user
+def debug_environment():
+    logging.info("🔍 === ПОЧАТОК ДЕБАГУ СЕРЕДОВИЩА ===")
     
-    await update.message.reply_text(
-        f"🔁 <b>Ваше повідомлення:</b>\n<code>{user_message}</code>\n\n"
-        f"💬 Прийнято, {user.first_name}!",
-        parse_mode='HTML'
-    )
-
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logging.error(f"Помилка: {context.error}")
+    # Отримуємо BOT_TOKEN
+    bot_token = os.environ.get('BOT_TOKEN')
+    logging.info(f"🎯 BOT_TOKEN = {bot_token}")
+    
+    # Перевіряємо довжину токена
+    if bot_token:
+        logging.info(f"📏 Довжина токена: {len(bot_token)} символів")
+    else:
+        logging.info("❌ Токен не знайдено або порожній")
+    
+    # Виводимо ВСІ змінні середовища (для дебагу)
+    logging.info("📋 ВСІ змінні середовища:")
+    for key, value in os.environ.items():
+        if any(word in key.upper() for word in ['BOT', 'TOKEN', 'SECRET', 'KEY']):
+            masked_value = value[:10] + '...' + value[-10:] if len(value) > 20 else value
+            logging.info(f"   {key} = {masked_value}")
+    
+    logging.info("🔚 === КІНЕЦЬ ДЕБАГУ ===")
+    
+    return bot_token
 
 def main():
+    logging.info("🚀 Запуск бота...")
+    
+    # Чекаємо 5 секунд (іноді змінні завантажуються з затримкою)
+    time.sleep(5)
+    
+    # Дебаг середовища
+    bot_token = debug_environment()
+    
+    if not bot_token:
+        logging.error("❌ КРИТИЧНА ПОМИЛКА: BOT_TOKEN не знайдено!")
+        logging.error("🛠 Дії для вирішення:")
+        logging.error("1. Перейдіть в Railway → Variables")
+        logging.error("2. Переконайтесь що змінна називається 'BOT_TOKEN'")
+        logging.error("3. Переконайтесь що значення введено правильно")
+        logging.error("4. Натисніть 'Redeploy' після змін")
+        return
+    
+    # Якщо токен знайдено, продовжуємо
+    logging.info("✅ BOT_TOKEN знайдено! Спробуємо ініціалізувати бота...")
+    
     try:
-        application = Application.builder().token(BOT_TOKEN).build()
+        from telegram.ext import Application
         
-        # Додаємо обробники
-        application.add_handler(CommandHandler("start", start_command))
-        application.add_handler(CommandHandler("help", help_command))
-        application.add_handler(CommandHandler("status", status_command))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo_handler))
+        app = Application.builder().token(bot_token).build()
+        logging.info("🟢 Бот успішно ініціалізований!")
         
-        application.add_error_handler(error_handler)
+        # Додаємо просту команду для тесту
+        from telegram import Update
+        from telegram.ext import ContextTypes, CommandHandler
         
-        # Запускаємо бота
-        logging.info("🟢 Бот запускається на Railway...")
-        application.run_polling(
-            drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES
-        )
+        async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            await update.message.reply_text("🎉 Бот успішно працює на Railway!")
+        
+        app.add_handler(CommandHandler("start", start))
+        
+        # Запускаємо
+        logging.info("🟢 Запускаємо опитування...")
+        app.run_polling(drop_pending_updates=True)
+        
     except Exception as e:
-        logging.error(f"❌ Критична помилка: {e}")
+        logging.error(f"❌ Помилка ініціалізації: {e}")
 
 if __name__ == '__main__':
     main()
